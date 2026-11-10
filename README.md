@@ -4,7 +4,7 @@ Track Segway Ninebot E3 Pro scooter rides on Apple Watch, separately from cyclin
 
 **Status:**
 - **Phase 1** (manual ride tracking with GPS on Apple Watch) is tested on the owner's watch.
-- **Phase 2** (iPhone sync, ride history with maps, deleting rides, Siri Shortcuts) is built and unit-tested. **Watch → iPhone sync is tested on the owner's devices.** Deletion, Siri and maps of a moving ride are not yet tested on devices.
+- **Phase 2** (iPhone sync, ride history with maps, deleting rides, Siri Shortcuts) is built and unit-tested. **Watch → iPhone sync and iPhone → watch deletion are tested on the owner's devices.** Siri, the iPhone End Ride shortcut and maps of a moving ride are not yet tested on devices.
 - **Phase 3** (optional, user-enabled scooter detection) is not started.
 
 ## What Phase 2 adds
@@ -134,6 +134,7 @@ All GPS data in the tests is **synthetic**.
   Phase 3 will offer only a discovery screen for standard, exposed information. It won't connect automatically or change settings. No firmware flashing, speed-limit changes or safety-feature changes, ever.
 - **Not yet built:** optional scooter detection and the Bluetooth discovery screen (Phase 3).
 - **Development reinstalls can erase unsynced watch rides.** See the note after the install steps.
+- **The watch may not hear back from the iPhone** while the iPhone app isn't running. This was seen once: the ride was safe on the iPhone, but the watch kept showing *Waiting for iPhone*. The cause is not confirmed. Opening ScooterRide on both devices should clear it, but that wasn't tested for that ride.
 - **App icons** are placeholders.
 - **Physical-device validation is partial.** See *Testing status*.
 
@@ -183,11 +184,19 @@ Phase 1, 2026-11-09, on a Mac mini (Apple M4, macOS 27.0.1, Xcode 26.6, Swift 6.
 | Install the iPhone app on the owner's **iPhone 16 Pro Max (iOS 27.2)** and the watch app on the **Apple Watch Ultra 2 (watchOS 27.2)** from Xcode 27.2, Personal Team, over Wi-Fi | **Both installed** (`ScooterRide 0.1 (1)`) and **running**, confirmed with `devicectl device info apps` and `processes` |
 | Watch data after the install | **The watch app's storage was reset.** Every folder in its data container was new, created one minute after the iPhone app's. This erased the Phase 1 test ride, which hadn't synced. Likely cause: installing the iPhone app, which embeds the watch app, replaced the watch app. **Not confirmed** |
 | **Watch → iPhone sync with a real ride.** The Phase 1 ride file (copied off the watch earlier) was put back in the watch app's Rides folder with `devicectl device copy to`. The watch app was then relaunched with `devicectl device process launch` | **Passed.** The ride was on the iPhone at the first check, under a minute after the relaunch. The iPhone's copy is **identical** to the watch's (JSON comparison: same ID, 57 points). The watch's `sync-state.json` lists the ride as **acknowledged**. The send was triggered by the app launch; a ride saved with **End** has not been tested yet |
+| The synced ride on screen (owner's check) | The iPhone list and detail screen showed it, and the watch showed **On iPhone** |
+
+**Phase 2, physical devices, 2026-11-10** (both devices on iOS/watchOS 27.2.1 after an update partway through; each step was monitored live from the Mac mini):
+
+| Check | Result |
+|---|---|
+| New 32 s ride saved with **End → Save Ride**, watch app on screen. When checked 10 minutes later, the iPhone was locked, so its app was suspended | **Partly passed.** A checkpoint appeared at Start and the ride file at Save. The ride reached the iPhone about 15 s after Save, identical to the watch's copy. **The watch never received the iPhone's acknowledgement** (still missing after 13 min) and kept showing *Waiting for iPhone*. Copies the watch re-sent when it was reopened piled up undelivered in the iPhone's WatchConnectivity inbox (3–4 copies) while the iPhone app was suspended. **Cause not confirmed.** An earlier test ride was lost because it was ended with *Discard Ride* |
+| The owner accidentally uninstalled the watch app after the 27.2.1 update. Reinstalled from the existing signed build with `devicectl device install app` | **Installed** in 4 s. Developer Mode stayed on through the update. The uninstall erased the watch's rides; both were still on the iPhone |
+| New 33 s ride saved with End → Save, **both apps on screen** | **Passed.** Saved at 12:16:56, on the iPhone at 12:16:57 (identical), acknowledged on the watch at 12:16:58. One fix dated before Start was rejected (`beforeSegmentStart`), confirming the Phase 2 fix on a device |
+| **Deletion:** that ride deleted on the iPhone (swipe, then confirm), watch app on screen | **Passed.** Gone from both devices in the same check, within about 10 s. The watch's `sync-state.json` records it as deleted, the iPhone keeps a deletion record, and the other two rides were untouched |
 
 **Not yet done for Phase 2:**
-- seeing the synced ride in the iPhone app's list and detail screens, and *On iPhone* on the watch
-- sync of a new ride saved with End, and sync after the iPhone was out of range
-- deletion on devices (iPhone → watch)
+- sync when the iPhone is out of range or locked, and the cause of the lost acknowledgement above
 - Siri phrases and the Action button
 - the iPhone End Ride shortcut
 - map thumbnails with a moving route
