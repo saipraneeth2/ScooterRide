@@ -4,7 +4,7 @@ Track Segway Ninebot E3 Pro scooter rides on Apple Watch, separately from cyclin
 
 **Status:**
 - **Phase 1** (manual ride tracking with GPS on Apple Watch) is tested on the owner's watch.
-- **Phase 2** (iPhone sync, ride history with maps, deleting rides, Siri Shortcuts) is built and unit-tested, but **not yet tested on devices**.
+- **Phase 2** (iPhone sync, ride history with maps, deleting rides, Siri Shortcuts) is built and unit-tested. **Watch → iPhone sync is tested on the owner's devices.** Deletion, Siri and maps of a moving ride are not yet tested on devices.
 - **Phase 3** (optional, user-enabled scooter detection) is not started.
 
 ## What Phase 2 adds
@@ -62,7 +62,7 @@ scripts/build.sh, scripts/test.sh    command-line build and test
 
 ## Requirements
 
-- Xcode 26.6 or later. Built here with Xcode 26.6 and the iOS/watchOS 26.5 SDKs.
+- Xcode 26.6 or later. Built here with Xcode 26.6 (iOS/watchOS 26.5 SDKs) and Xcode 27.2 (iOS/watchOS 27.2 SDKs).
 - iPhone with iOS 17 or later, and a paired Apple Watch with watchOS 10 or later.
 - An Apple ID added to Xcode (*Xcode > Settings > Accounts*). A free Personal Team works; its installs expire after 7 days.
 
@@ -81,6 +81,8 @@ scripts/build.sh, scripts/test.sh    command-line build and test
 8. **Install the watch app:** choose the **ScooterRideWatch** scheme and your **Apple Watch** as the destination, then press **Run**. The first install to a watch can take several minutes.
 9. With a Personal Team, the first launch may say the developer is untrusted. Fix it on iPhone: *Settings > General > VPN & Device Management*, then trust your Apple ID.
 10. On the watch, open ScooterRide, tap **Start Ride**, and allow location access **While Using the App**.
+
+**Before installing a new build,** open ScooterRide on the watch near the iPhone, and check that its rides say *On iPhone*. In testing, installing a new build reset the watch app's storage and erased a ride that hadn't synced yet.
 
 ## Run in the Simulator
 
@@ -130,11 +132,10 @@ All GPS data in the tests is **synthetic**.
   - no standard battery, firmware or speed data
   
   Phase 3 will offer only a discovery screen for standard, exposed information. It won't connect automatically or change settings. No firmware flashing, speed-limit changes or safety-feature changes, ever.
-- **Not yet built:**
-  - iPhone history, sync and Siri Shortcuts (Phase 2)
-  - automatic detection (Phase 3)
+- **Not yet built:** optional scooter detection and the Bluetooth discovery screen (Phase 3).
+- **Development reinstalls can erase unsynced watch rides.** See the note after the install steps.
 - **App icons** are placeholders.
-- **Physical-device validation has not been done yet.** See *Testing status*.
+- **Physical-device validation is partial.** See *Testing status*.
 
 ## Testing status (only results that actually ran)
 
@@ -168,20 +169,35 @@ Phase 1, 2026-11-09, on a Mac mini (Apple M4, macOS 27.0.1, Xcode 26.6, Swift 6.
 | iPhone app on the iPhone 17 Pro Max **simulator** | Launched; *Scooter Rides* empty state rendered correctly (screenshot) |
 | `scripts/sim-sync-e2e.sh`: watch → iPhone sync between paired **simulators** with a synthetic ride | **Inconclusive (simulator problem).** The watch app activated WatchConnectivity, saw the iPhone as reachable and called `transferFile`. The iPhone simulator's IDS transport then failed repeatedly ("XPC has informed us that a fatal error has occured"), so the file never arrived, even after restarting both simulators. This showed that a first send can happen before the iPhone side is ready, so retries were added (on reachability, on companion-app install, and 60 s after a failed transfer) |
 
+**Phase 2 rebuild on Xcode 27.2, 2026-11-09, Mac mini (Xcode 27.2, Swift 6.4.2, iOS/watchOS 27.2 SDKs).** Xcode had been updated, and its *recommended settings* were accepted. That added the standard warning flags and moved the team ID to the project level.
+
+| Check | Result |
+|---|---|
+| `scripts/test.sh` | **44 tests in 10 suites passed** |
+| `scripts/build.sh` | **All 3 builds succeeded**, no compiler warnings or errors |
+
+**Phase 2, physical devices, 2026-11-09:**
+
+| Check | Result |
+|---|---|
+| Install the iPhone app on the owner's **iPhone 16 Pro Max (iOS 27.2)** and the watch app on the **Apple Watch Ultra 2 (watchOS 27.2)** from Xcode 27.2, Personal Team, over Wi-Fi | **Both installed** (`ScooterRide 0.1 (1)`) and **running**, confirmed with `devicectl device info apps` and `processes` |
+| Watch data after the install | **The watch app's storage was reset.** Every folder in its data container was new, created one minute after the iPhone app's. This erased the Phase 1 test ride, which hadn't synced. Likely cause: installing the iPhone app, which embeds the watch app, replaced the watch app. **Not confirmed** |
+| **Watch → iPhone sync with a real ride.** The Phase 1 ride file (copied off the watch earlier) was put back in the watch app's Rides folder with `devicectl device copy to`. The watch app was then relaunched with `devicectl device process launch` | **Passed.** The ride was on the iPhone at the first check, under a minute after the relaunch. The iPhone's copy is **identical** to the watch's (JSON comparison: same ID, 57 points). The watch's `sync-state.json` lists the ride as **acknowledged**. The send was triggered by the app launch; a ride saved with **End** has not been tested yet |
+
 **Not yet done for Phase 2:**
-- installing the iPhone app on the owner's iPhone
-- real watch → iPhone sync, acknowledgements and deletion on devices
+- seeing the synced ride in the iPhone app's list and detail screens, and *On iPhone* on the watch
+- sync of a new ride saved with End, and sync after the iPhone was out of range
+- deletion on devices (iPhone → watch)
 - Siri phrases and the Action button
 - the iPhone End Ride shortcut
-- map thumbnails with a real route
+- map thumbnails with a moving route
 
 **Not yet done:**
-- the location permission prompt on the device
-- recording a real ride
+- the location permission prompt after the reinstall
+- recording a moving ride
 - background recording with the wrist lowered
 - battery impact
 - comparing GPS speed with the scooter's speedometer
-- the iPhone app on the iPhone 16 Pro Max
 - tapping Start Ride in the simulator, or replaying a simulated route
 
 ### Troubleshooting Developer Mode on Apple Watch
