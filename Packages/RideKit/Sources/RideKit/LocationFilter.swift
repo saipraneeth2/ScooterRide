@@ -9,6 +9,7 @@ public enum RejectionReason: String, Codable, CodingKeyRepresentable, CaseIterab
     case duplicate             // same timestamp as the previous accepted fix
     case implausibleSpeed      // reported speed above the plausibility cap
     case implausibleJump       // position jump implies a speed above the cap
+    case beforeSegmentStart    // timestamped before the ride (or resume) started
 }
 
 public enum FilterDecision: Equatable, Sendable {

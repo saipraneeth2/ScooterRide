@@ -12,17 +12,26 @@ public enum RideStoreError: Error, Equatable {
 public final class RideStore: @unchecked Sendable {
     public let directory: URL
     private let lock = NSLock()
-    private let encoder: JSONEncoder = {
+    private let encoder = RideStore.makeEncoder()
+    private let decoder = RideStore.makeDecoder()
+
+    public static func makeEncoder() -> JSONEncoder {
         let e = JSONEncoder()
         e.dateEncodingStrategy = .iso8601withFractionalSeconds
         e.outputFormatting = [.sortedKeys]
         return e
-    }()
-    private let decoder: JSONDecoder = {
+    }
+
+    public static func makeDecoder() -> JSONDecoder {
         let d = JSONDecoder()
         d.dateDecodingStrategy = .iso8601withFractionalSeconds
         return d
-    }()
+    }
+
+    /// Decodes the contents of a ride file (for example one received from the other device).
+    public static func decodeRide(_ data: Data) throws -> RideSession {
+        try makeDecoder().decode(RideSession.self, from: data)
+    }
 
     public init(directory: URL) throws {
         self.directory = directory
@@ -36,7 +45,9 @@ public final class RideStore: @unchecked Sendable {
         return base.appendingPathComponent("Rides", isDirectory: true)
     }
 
-    private func fileURL(for id: UUID) -> URL { directory.appendingPathComponent("ride-\(id.uuidString).json") }
+    public func fileURL(for id: UUID) -> URL { directory.appendingPathComponent("ride-\(id.uuidString).json") }
+
+    public func contains(id: UUID) -> Bool { FileManager.default.fileExists(atPath: fileURL(for: id).path) }
     private var checkpointURL: URL { directory.appendingPathComponent("checkpoint.json") }
 
     // MARK: Finished rides

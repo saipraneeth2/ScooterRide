@@ -118,7 +118,12 @@ public struct RideRecorder: Sendable {
             lastDecision = .reject(.notRecording)
             return .reject(.notRecording)
         }
-        let decision = filter.evaluate(sample, previous: previousInSegment, now: now)
+        var decision = filter.evaluate(sample, previous: previousInSegment, now: now)
+        // A fix timestamped before Start/Resume belongs to before the ride (seen on a real
+        // watch: the first fix was 0.4 s older than the Start tap). Keep it out of the route.
+        if decision == .accept, let segmentStart = s.intervals.last?.start, sample.timestamp < segmentStart {
+            decision = .reject(.beforeSegmentStart)
+        }
         lastDecision = decision
         guard decision == .accept else {
             if case .reject(let reason) = decision { s.rejectedSampleCounts[reason, default: 0] += 1 }

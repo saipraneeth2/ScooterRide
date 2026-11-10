@@ -22,6 +22,10 @@ struct RecentRidesView: View {
                             Text("\(RideFormat.distance(ride.distanceMeters)) · \(RideFormat.duration(ride.activeDuration(at: ride.endDate ?? Date())))")
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
+                            Label(model.syncedRideIDs.contains(ride.id) ? "On iPhone" : "Waiting for iPhone",
+                                  systemImage: model.syncedRideIDs.contains(ride.id) ? "checkmark.icloud" : "clock")
+                                .font(.caption2)
+                                .foregroundStyle(model.syncedRideIDs.contains(ride.id) ? .green : .secondary)
                         }
                     }
                 }

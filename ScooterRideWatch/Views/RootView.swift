@@ -19,7 +19,7 @@ struct RootView: View {
             RideSummaryView(ride: ride, showsDone: true)
         }
         .onChange(of: scenePhase) { _, phase in
-            if phase != .active { model.appMovedToBackground() }
+            if phase == .active { model.appBecameActive() } else { model.appMovedToBackground() }
         }
     }
 }

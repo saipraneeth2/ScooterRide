@@ -8,7 +8,12 @@ import RideKit
 @MainActor
 @Observable
 final class RideViewModel {
+    /// One instance for the app and its App Intents (Siri / Shortcuts / Action button).
+    static let shared = RideViewModel()
+
     private(set) var recorder = RideRecorder()
+    /// Rides the iPhone has confirmed it stored.
+    private(set) var syncedRideIDs: Set<UUID> = []
     private(set) var authorization: CLAuthorizationStatus = .notDetermined
     private(set) var recentRides: [RideSession] = []
     private(set) var recoveredRide: RideSession?
@@ -20,6 +25,7 @@ final class RideViewModel {
 
     @ObservationIgnored private let location = LocationService()
     @ObservationIgnored private let store: RideStore?
+    @ObservationIgnored private let sync: WatchSync
     @ObservationIgnored private var lastCheckpoint = Date.distantPast
     @ObservationIgnored private var pendingStart = false
 
@@ -29,6 +35,7 @@ final class RideViewModel {
 
     init() {
         store = try? RideStore(directory: RideStore.defaultDirectory())
+        sync = WatchSync(store: store)
         if UserDefaults.standard.object(forKey: Self.accuracyKey) != nil {
             highAccuracyGPS = UserDefaults.standard.bool(forKey: Self.accuracyKey)
         }
@@ -37,8 +44,18 @@ final class RideViewModel {
         if store == nil { errorMessage = "Ride storage is unavailable; rides cannot be saved." }
         // A checkpoint left behind means the app was terminated mid-ride: keep that ride.
         recoveredRide = try? store?.recoverCheckpoint()
+        sync.onChange = { [weak self] in self?.reloadRides() }
+        sync.onEndRequest = { [weak self] in
+            guard let self, self.recorder.state == .active || self.recorder.state == .paused else { return false }
+            self.endRide()
+            return true
+        }
+        sync.activate()   // sends any unsynced rides once the session is ready
         reloadRides()
     }
+
+    /// Called when the app comes to the foreground: retry sync for anything still unsent.
+    func appBecameActive() { sync.syncPending() }
 
     // MARK: Ride controls
 
@@ -82,6 +99,7 @@ final class RideViewModel {
         lastFinishedRide = ride
         recorder.reset()
         reloadRides()
+        sync.syncPending()
     }
 
     func discardRide() {
@@ -103,7 +121,10 @@ final class RideViewModel {
     /// Called when the app leaves the foreground: persist progress in case watchOS terminates it.
     func appMovedToBackground() { checkpoint(force: true) }
 
-    func reloadRides() { recentRides = store?.all().rides ?? [] }
+    func reloadRides() {
+        recentRides = store?.all().rides ?? []
+        syncedRideIDs = sync.state.acknowledged
+    }
 
     var isAuthorized: Bool { authorization == .authorizedWhenInUse || authorization == .authorizedAlways }
 

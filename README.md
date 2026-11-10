@@ -2,7 +2,27 @@
 
 Track Segway Ninebot E3 Pro scooter rides on Apple Watch, separately from cycling workouts.
 
-**Status: Phase 1** (manual ride tracking with GPS on Apple Watch). Phase 2 adds iPhone sync, ride history with maps, deletion and Siri Shortcuts. Phase 3 investigates optional, user-enabled scooter detection.
+**Status:**
+- **Phase 1** (manual ride tracking with GPS on Apple Watch) is tested on the owner's watch.
+- **Phase 2** (iPhone sync, ride history with maps, deleting rides, Siri Shortcuts) is built and unit-tested, but **not yet tested on devices**.
+- **Phase 3** (optional, user-enabled scooter detection) is not started.
+
+## What Phase 2 adds
+
+- **Sync:**
+  - **How rides travel:** finished rides are copied from Apple Watch to iPhone with WatchConnectivity `transferFile`. The system queues these transfers and delivers them whenever the iPhone is reachable, even after either app has quit.
+  - **Acknowledgements:** the watch re-sends a ride until the iPhone confirms it, retrying after failures, when the iPhone app appears, and when it becomes reachable. The watch's ride list shows *On iPhone* or *Waiting for iPhone*.
+  - **Duplicates:** importing is idempotent, so the same ride arriving twice is harmless.
+- **Ride history on iPhone:**
+  - **List:** newest first, each with a map thumbnail of the route, distance, time, and max and average speed.
+  - **Ride detail:** a full map with the route (a separate line for each segment between pauses) and start/end markers. It also shows ride time, distance, average and max speed, start and end times, pauses, and GPS fixes kept or filtered out, with reasons.
+- **Deleting rides:** swipe a ride or use **Delete Ride** in its detail screen, then confirm. The ride is deleted from iPhone, and Apple Watch is asked to delete its copy too (queued if the watch is away). Deleted rides are remembered, so a late transfer can never bring one back.
+- **Siri and Shortcuts:**
+  - **On Apple Watch:** *“Start a scooter ride in ScooterRide”* and *“End my scooter ride in ScooterRide”*. Start opens the app, because location permission and GPS need it on screen. Both appear in the watch's Shortcuts app; on Apple Watch Ultra you can assign *Start Ride* to the Action button (Settings → Action Button → Shortcut). That last part is not yet tested.
+  - **On iPhone:** *“End my scooter ride in ScooterRide”* asks the watch to end and save the ride. It only works while the watch app is reachable; otherwise it says so instead of queueing a request that could end a ride later than intended. Watch-side end requests older than 60 s are ignored.
+  - **No Start Ride on iPhone:** there's no supported way to start a ride on the watch from iPhone in the background without a HealthKit workout session, which ScooterRide deliberately doesn't use. Start rides on the watch: tap, Siri, or the Action button.
+- **Pre-start fixes are ignored.** A GPS fix timestamped before Start or Resume is no longer recorded. This was found in the first device test.
+- **Maps** use Apple Maps tiles over the network; your ride data never leaves your devices.
 
 ## What it does (Phase 1)
 
@@ -27,8 +47,10 @@ ScooterRide.xcodeproj          iOS app + watchOS app (folder-synced groups, shar
 Packages/RideKit/              Swift package: units, GPS filter, speed estimator, ride state
                                machine, metrics, JSON storage. No CoreLocation/HealthKit/UI.
   Tests/RideKitTests/          Unit tests (Swift Testing), synthetic GPS tracks only
-ScooterRideWatch/              watchOS app: LocationService (Core Location), RideViewModel, views
-ScooterRide/                   iOS companion (Phase 1: information; Phase 2: history and sync)
+ScooterRideWatch/              watchOS app: LocationService (Core Location), RideViewModel, WatchSync
+                               (WatchConnectivity), RideIntents (App Intents + Siri phrases), views
+ScooterRide/                   iOS app: RideLibrary, PhoneSync (WatchConnectivity), history, detail
+                               with MapKit, RouteSnapshotter (list thumbnails), PhoneIntents, About
 Config/ScooterRideWatch-Info.plist   adds the "location" background mode for the watch app
 scripts/build.sh, scripts/test.sh    command-line build and test
 ```
@@ -135,7 +157,23 @@ Phase 1, 2026-11-09, on a Mac mini (Apple M4, macOS 27.0.1, Xcode 26.6, Swift 6.
 | App launch on the watch | **Running**, confirmed with `devicectl device info processes`. The owner confirmed it opened |
 | Test recording 1: 67 s, owner essentially stationary (track stayed within 6.9 m of the start). Ride file copied off the watch with `devicectl device copy from`; analyzed as aggregates only | 57 fixes at 1 Hz (largest gap 6 s, during GPS warm-up). 0 fixes rejected. Median accuracy 2.9 m (90th percentile 9.3 m). Doppler speed on 54 of 57 fixes. Raw point-to-point jitter of 41 m was correctly recorded as **0 m distance**. Max 1.4 mph. Saved and listed correctly. **Not a test of moving rides or wrist-down recording** |
 
-**Found in testing:** the first accepted fix was timestamped 0.4 s before Start. Planned fix: ignore fixes timestamped before the ride (or resume) started.
+**Found in testing:** the first accepted fix was timestamped 0.4 s before Start. **Fixed in Phase 2:** fixes timestamped before Start or Resume are now rejected (`beforeSegmentStart`, unit-tested).
+
+**Phase 2, 2026-11-09, Mac mini (same toolchain):**
+
+| Check | Result |
+|---|---|
+| `scripts/test.sh`: **44 tests in 10 suites** (12 new: pre-start rule, sync messages, send planning, sync state, import edge cases, route geometry) | **Passed**, no warnings |
+| `scripts/build.sh`: watch app (Simulator), iOS + embedded watch app (Simulator), both for devices (unsigned) | **All succeeded**, no warnings |
+| iPhone app on the iPhone 17 Pro Max **simulator** | Launched; *Scooter Rides* empty state rendered correctly (screenshot) |
+| `scripts/sim-sync-e2e.sh`: watch → iPhone sync between paired **simulators** with a synthetic ride | **Inconclusive (simulator problem).** The watch app activated WatchConnectivity, saw the iPhone as reachable and called `transferFile`. The iPhone simulator's IDS transport then failed repeatedly ("XPC has informed us that a fatal error has occured"), so the file never arrived, even after restarting both simulators. This showed that a first send can happen before the iPhone side is ready, so retries were added (on reachability, on companion-app install, and 60 s after a failed transfer) |
+
+**Not yet done for Phase 2:**
+- installing the iPhone app on the owner's iPhone
+- real watch → iPhone sync, acknowledgements and deletion on devices
+- Siri phrases and the Action button
+- the iPhone End Ride shortcut
+- map thumbnails with a real route
 
 **Not yet done:**
 - the location permission prompt on the device

@@ -2,7 +2,7 @@ import SwiftUI
 
 @main
 struct ScooterRideWatchApp: App {
-    @State private var model = RideViewModel()
+    @State private var model = RideViewModel.shared
 
     var body: some Scene {
         WindowGroup {
