@@ -12,6 +12,13 @@ final class RideLibrary {
     private(set) var unreadableCount = 0
     private(set) var watchStatus = "Connecting to Apple Watch…"
     var errorMessage: String?
+    /// Smart Detection on iPhone: show a ride-type estimate on each ride. Off by default.
+    private(set) var showRideTypes = UserDefaults.standard.bool(forKey: "showRideTypes")
+
+    func setShowRideTypes(_ on: Bool) {
+        showRideTypes = on
+        UserDefaults.standard.set(on, forKey: "showRideTypes")
+    }
 
     @ObservationIgnored let sync: PhoneSync
     @ObservationIgnored private let store: RideStore?

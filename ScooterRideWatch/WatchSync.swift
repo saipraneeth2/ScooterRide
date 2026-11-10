@@ -37,6 +37,13 @@ final class WatchSync: NSObject {
 
     func isSynced(_ id: UUID) -> Bool { state.acknowledged.contains(id) }
 
+    /// Tells the iPhone whether a ride is recording, so its riding alert stays quiet during
+    /// rides. Application context keeps only the latest value and is delivered when possible.
+    func updateRecordingState(_ recording: Bool) {
+        guard let session, session.activationState == .activated else { return }
+        try? session.updateApplicationContext(["recording": recording, "updated": Date()])
+    }
+
     /// Brings the iPhone up to date. When it is in range, asks it first which rides it has
     /// (see `checkIn`), then sends only what is still missing. Otherwise queues every ride
     /// the iPhone has not confirmed; the system delivers those later.

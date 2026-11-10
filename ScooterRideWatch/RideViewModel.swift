@@ -23,6 +23,9 @@ final class RideViewModel {
 
     let backgroundUpdatesAvailable = LocationService.supportsBackgroundUpdates
 
+    /// Optional Smart Detection (off by default). Suggests only; never starts or ends a ride.
+    let smart = SmartDetection()
+
     @ObservationIgnored private let location = LocationService()
     @ObservationIgnored private let store: RideStore?
     @ObservationIgnored private let sync: WatchSync
@@ -51,11 +54,20 @@ final class RideViewModel {
             return true
         }
         sync.activate()   // sends any unsynced rides once the session is ready
+        smart.onMotion = { [weak self] kind, date in self?.recorder.ingestMotion(kind, at: date) }
+        smart.currentRideSpeed = { [weak self] in self?.recorder.metrics(at: Date()).currentSpeed }
+        smart.onEndRequested = { [weak self] in
+            guard let self, self.recorder.state == .active || self.recorder.state == .paused else { return }
+            self.endRide()
+        }
         reloadRides()
     }
 
     /// Called when the app comes to the foreground: retry sync for anything still unsent.
-    func appBecameActive() { sync.syncPending() }
+    func appBecameActive() {
+        sync.syncPending()
+        smart.appBecameActive()
+    }
 
     // MARK: Ride controls
 
@@ -77,6 +89,7 @@ final class RideViewModel {
         guard recorder.state == .active else { return }
         try? recorder.pause(at: Date())
         location.stop()            // saves battery; GPS re-acquires on resume
+        smart.ridePaused()
         checkpoint(force: true)
     }
 
@@ -84,6 +97,7 @@ final class RideViewModel {
         guard recorder.state == .paused else { return }
         try? recorder.resume(at: Date())
         location.start(highAccuracy: highAccuracyGPS)
+        smart.rideResumed()
         checkpoint(force: true)
     }
 
@@ -98,6 +112,8 @@ final class RideViewModel {
         }
         lastFinishedRide = ride
         recorder.reset()
+        smart.rideEnded()
+        sync.updateRecordingState(false)
         reloadRides()
         sync.syncPending()
     }
@@ -106,6 +122,8 @@ final class RideViewModel {
         location.stop()
         store?.clearCheckpoint()
         recorder.reset()
+        smart.rideEnded()
+        sync.updateRecordingState(false)
     }
 
     func setHighAccuracy(_ on: Bool) {
@@ -119,7 +137,10 @@ final class RideViewModel {
     func metrics(at date: Date) -> RideMetrics { recorder.metrics(at: date) }
 
     /// Called when the app leaves the foreground: persist progress in case watchOS terminates it.
-    func appMovedToBackground() { checkpoint(force: true) }
+    func appMovedToBackground() {
+        checkpoint(force: true)
+        smart.appMovedToBackground()
+    }
 
     func reloadRides() {
         recentRides = store?.all().rides ?? []
@@ -138,13 +159,18 @@ final class RideViewModel {
             return
         }
         location.start(highAccuracy: highAccuracyGPS)
+        smart.rideStarted()
+        sync.updateRecordingState(true)
         checkpoint(force: true)
     }
 
     private func handle(_ event: LocationService.Event) {
         switch event {
         case .sample(let sample):
-            if recorder.ingest(sample, now: Date()) == .accept { checkpoint(force: false) }
+            if recorder.ingest(sample, now: Date()) == .accept {
+                checkpoint(force: false)
+                smart.rideReading(at: Date())
+            }
         case .authorization(let status):
             authorization = status
             if pendingStart {

@@ -342,6 +342,10 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = ScooterRide;
+				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "ScooterRide scans for Bluetooth devices only when you tap Scan, to show standard information. It never changes your scooter's settings.";
+				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "With Riding alerts on, iOS wakes ScooterRide when you move a significant distance (roughly 500 m). It checks whether your motion looks like riding and may suggest recording a ride on Apple Watch. Location stays on this iPhone.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "ScooterRide uses location on iPhone only for Riding alerts, which you turn on in Settings.";
+				INFOPLIST_KEY_NSMotionUsageDescription = "With Riding alerts on, ScooterRide checks your iPhone's recent motion activity to decide whether you seem to be riding. It is an estimate and never records a ride by itself.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -374,6 +378,10 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = ScooterRide;
+				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "ScooterRide scans for Bluetooth devices only when you tap Scan, to show standard information. It never changes your scooter's settings.";
+				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "With Riding alerts on, iOS wakes ScooterRide when you move a significant distance (roughly 500 m). It checks whether your motion looks like riding and may suggest recording a ride on Apple Watch. Location stays on this iPhone.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "ScooterRide uses location on iPhone only for Riding alerts, which you turn on in Settings.";
+				INFOPLIST_KEY_NSMotionUsageDescription = "With Riding alerts on, ScooterRide checks your iPhone's recent motion activity to decide whether you seem to be riding. It is an estimate and never records a ride by itself.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -407,7 +415,9 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Config/ScooterRideWatch-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = ScooterRide;
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "ScooterRide uses your location only during a ride you start, to estimate speed and distance and to record your route. Location is not used when no ride is active.";
+				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "ScooterRide scans for Bluetooth devices only when you tap Scan, or briefly when you open the app if you picked your scooter for Smart Detection. It shows standard information only and never changes your scooter's settings.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "ScooterRide uses your location during a ride you start, to estimate speed and distance and to record your route. With Smart Detection on, it also checks your speed while the app is open, to suggest starting a ride.";
+				INFOPLIST_KEY_NSMotionUsageDescription = "With Smart Detection on, ScooterRide uses motion activity during rides to estimate whether you were riding or walking, and to suggest ending a ride after you stop. It never starts or ends a ride by itself.";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
 				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.saipraneethmedisetti.ScooterRide;
 				INFOPLIST_KEY_WKRunsIndependentlyOfCompanionApp = YES;
@@ -438,7 +448,9 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Config/ScooterRideWatch-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = ScooterRide;
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "ScooterRide uses your location only during a ride you start, to estimate speed and distance and to record your route. Location is not used when no ride is active.";
+				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "ScooterRide scans for Bluetooth devices only when you tap Scan, or briefly when you open the app if you picked your scooter for Smart Detection. It shows standard information only and never changes your scooter's settings.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "ScooterRide uses your location during a ride you start, to estimate speed and distance and to record your route. With Smart Detection on, it also checks your speed while the app is open, to suggest starting a ride.";
+				INFOPLIST_KEY_NSMotionUsageDescription = "With Smart Detection on, ScooterRide uses motion activity during rides to estimate whether you were riding or walking, and to suggest ending a ride after you stop. It never starts or ends a ride by itself.";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
 				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.saipraneethmedisetti.ScooterRide;
 				INFOPLIST_KEY_WKRunsIndependentlyOfCompanionApp = YES;

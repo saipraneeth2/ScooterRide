@@ -7,6 +7,8 @@ struct StartView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 10) {
+                if let reason = model.smart.startSuggestion { startSuggestion(reason) }
+
                 Button {
                     model.startRide()
                 } label: {
@@ -51,6 +53,24 @@ struct StartView: View {
                                                     set: { model.setHighAccuracy($0) }))
                     .font(.footnote)
 
+                Toggle("Smart Detection", isOn: Binding(get: { model.smart.isEnabled },
+                                                        set: { model.smart.setEnabled($0) }))
+                    .font(.footnote)
+                if model.smart.isEnabled {
+                    Text("Suggests starting or ending a ride, but never does either by itself. Results are estimates.")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+
+                NavigationLink {
+                    BluetoothDiscoveryList(scanner: model.smart.scanner, chosenID: model.smart.myScooterID,
+                                           chosenLabel: model.smart.myScooterLabel,
+                                           onChoose: { model.smart.chooseScooter($0) },
+                                           onForget: { model.smart.forgetScooter() })
+                } label: {
+                    Label("Bluetooth", systemImage: "antenna.radiowaves.left.and.right")
+                }
+
                 Text("Speeds are GPS estimates. Rides are never saved as workouts and earn no exercise minutes or calories.")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
@@ -59,6 +79,34 @@ struct StartView: View {
             .padding(.horizontal, 2)
         }
         .navigationTitle("ScooterRide")
+    }
+
+    private func startSuggestion(_ reason: StartReason) -> some View {
+        VStack(spacing: 6) {
+            Text(suggestionText(reason))
+                .font(.footnote.weight(.semibold))
+                .multilineTextAlignment(.center)
+            Text("Smart Detection estimate")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            HStack {
+                Button("Start") { model.startRide() }
+                    .tint(.green)
+                Button("Not now") { model.smart.dismissStartSuggestion() }
+            }
+            .controlSize(.small)
+        }
+        .padding(8)
+        .background(.green.opacity(0.15), in: RoundedRectangle(cornerRadius: 10))
+    }
+
+    private func suggestionText(_ reason: StartReason) -> String {
+        switch reason {
+        case .movingAtScooterSpeed(let speed):
+            return "Moving at about \(RideFormat.speed(speed)) mph. Start a ride?"
+        case .scooterNearby:
+            return "Your scooter seems to be on nearby. Start a ride?"
+        }
     }
 
     @ViewBuilder private var locationRow: some View {

@@ -28,6 +28,15 @@ final class PhoneSync: NSObject {
         session.activate()
     }
 
+    /// Whether the watch last reported a ride recording. Ignored after 6 hours, in case the
+    /// watch app stopped without reporting the end.
+    var watchIsRecording: Bool {
+        guard let context = session?.receivedApplicationContext,
+              context["recording"] as? Bool == true,
+              let updated = context["updated"] as? Date else { return false }
+        return Date().timeIntervalSince(updated) < 6 * 3600
+    }
+
     var statusText: String {
         guard let session else { return "This iPhone doesn't support Apple Watch." }
         guard session.activationState == .activated else { return "Connecting to Apple Watch…" }

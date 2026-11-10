@@ -49,6 +49,18 @@ struct RideDetailView: View {
                 Text("Speeds and distance are GPS estimates and can differ from the scooter's speedometer. This ride is not a workout and adds no exercise minutes or calories.")
             }
 
+            if library.showRideTypes {
+                let estimate = RideTypeEstimator.estimate(ride)
+                Section {
+                    Text(estimate.title).font(.headline)
+                    ForEach(estimate.details, id: \.self) { Text($0).font(.footnote) }
+                } header: {
+                    Text("Ride type (estimate)")
+                } footer: {
+                    Text(RideTypeEstimate.caveat)
+                }
+            }
+
             Section {
                 Button("Delete Ride", systemImage: "trash", role: .destructive) { confirmDelete = true }
             }

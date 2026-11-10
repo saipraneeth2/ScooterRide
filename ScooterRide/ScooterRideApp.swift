@@ -24,6 +24,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
     func application(_ application: UIApplication,
                      didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         _ = RideLibrary.shared   // its init activates the WatchConnectivity session
+        RidingAlerts.shared.resumeIfEnabled()   // receives the location event iOS relaunched us for
         return true
     }
 }

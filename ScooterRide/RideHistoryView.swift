@@ -65,6 +65,7 @@ struct RideHistoryView: View {
 
 struct RideRow: View {
     let ride: RideSession
+    @Environment(RideLibrary.self) private var library
 
     var body: some View {
         HStack(spacing: 12) {
@@ -77,6 +78,11 @@ struct RideRow: View {
                 Text("Max \(RideFormat.speed(ride.maxSpeedMetersPerSecond)) mph · Avg \(RideFormat.speed(ride.averageSpeed(at: ride.endDate ?? Date()))) mph")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                if library.showRideTypes {
+                    Text("\(RideTypeEstimator.estimate(ride).title) (estimate)")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
             }
         }
         .accessibilityElement(children: .combine)

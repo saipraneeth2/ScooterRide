@@ -48,6 +48,8 @@ public struct RideRecorder: Sendable {
     public var gpsLostAfter: TimeInterval = 10
 
     private var segment = 0
+    private var motionKind: MotionKind?
+    private var motionSince: Date?
     private var previousInSegment: LocationSample?
     private var distanceAnchor: LocationSample?
     private var smoothedSpeed: Double?
@@ -67,10 +69,14 @@ public struct RideRecorder: Sendable {
         resetSegmentTracking()
         lastAcceptedSample = nil
         lastDecision = nil
+        motionKind = nil
+        motionSince = nil
     }
 
     public mutating func pause(at date: Date) throws {
-        guard state == .active, var s = session else { throw RideRecorderError.invalidTransition(from: state, action: "pause") }
+        guard state == .active else { throw RideRecorderError.invalidTransition(from: state, action: "pause") }
+        accrueMotion(until: date)
+        guard var s = session else { throw RideRecorderError.invalidTransition(from: state, action: "pause") }
         closeOpenInterval(&s, at: date)
         session = s
         state = .paused
@@ -84,14 +90,17 @@ public struct RideRecorder: Sendable {
         segment += 1
         state = .active
         resetSegmentTracking()
+        if motionKind != nil { motionSince = date }   // paused time never counts
     }
 
     /// Ends the ride and returns the finished session. Allowed from active or paused.
     @discardableResult
     public mutating func end(at date: Date) throws -> RideSession {
-        guard state == .active || state == .paused, var s = session else {
+        guard state == .active || state == .paused else {
             throw RideRecorderError.invalidTransition(from: state, action: "end")
         }
+        accrueMotion(until: date)
+        guard var s = session else { throw RideRecorderError.invalidTransition(from: state, action: "end") }
         closeOpenInterval(&s, at: date)
         s.endDate = date
         session = s
@@ -107,7 +116,32 @@ public struct RideRecorder: Sendable {
         lastAcceptedSample = nil
         lastDecision = nil
         segment = 0
+        motionKind = nil
+        motionSince = nil
         resetSegmentTracking()
+    }
+
+    // MARK: Motion input
+
+    /// Records a Core Motion activity change. Time counts toward the previous kind only while
+    /// actively recording, never while paused.
+    public mutating func ingestMotion(_ kind: MotionKind, at date: Date) {
+        guard state == .active || state == .paused else { return }
+        accrueMotion(until: date)
+        motionKind = kind
+        motionSince = date
+    }
+
+    private mutating func accrueMotion(until date: Date) {
+        guard state == .active, var s = session, let kind = motionKind, let since = motionSince else { return }
+        let from = max(since, s.intervals.last?.start ?? since)
+        let dt = date.timeIntervalSince(from)
+        motionSince = date
+        guard dt > 0 else { return }
+        var summary = s.motion ?? MotionSummary()
+        summary.seconds[kind, default: 0] += dt
+        s.motion = summary
+        session = s
     }
 
     // MARK: GPS input

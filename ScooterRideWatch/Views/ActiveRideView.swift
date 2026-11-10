@@ -28,6 +28,13 @@ struct ActiveRideView: View {
             Button("Discard Ride", role: .destructive) { model.discardRide() }
             Button("Keep Riding", role: .cancel) {}
         }
+        .alert("Stopped riding?", isPresented: Binding(get: { model.smart.stopSuggestionPending && !confirmEnd },
+                                                     set: { _ in })) {
+            Button("Save Ride") { model.endRide() }
+            Button("Keep Riding", role: .cancel) { model.smart.keepRiding() }
+        } message: {
+            Text("No riding movement for 3 minutes. This is an estimate; the ride keeps recording until you choose.")
+        }
     }
 
     private func speedBlock(_ m: RideMetrics) -> some View {

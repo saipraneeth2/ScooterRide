@@ -5,6 +5,7 @@ struct RideSummaryView: View {
     let ride: RideSession
     var showsDone: Bool = false
     @Environment(\.dismiss) private var dismiss
+    @Environment(RideViewModel.self) private var model
 
     var body: some View {
         ScrollView {
@@ -30,6 +31,13 @@ struct RideSummaryView: View {
                 Text("GPS fixes: \(ride.acceptedSampleCount) kept, \(ride.rejectedSampleTotal) filtered out")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
+                if model.smart.isEnabled {
+                    let estimate = RideTypeEstimator.estimate(ride)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(estimate.title).font(.footnote.weight(.semibold))
+                        Text("Ride type estimate").font(.caption2).foregroundStyle(.secondary)
+                    }
+                }
                 Text("Speeds are GPS estimates. Not saved as a workout.")
                     .font(.caption2)
                     .foregroundStyle(.secondary)

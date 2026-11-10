@@ -44,6 +44,9 @@ public struct RideSession: Codable, Identifiable, Equatable, Sendable {
     public var rejectedSampleCounts: [RejectionReason: Int]
     /// True when the ride was rebuilt from a checkpoint after the app was terminated mid-ride.
     public var recovered: Bool
+    /// Core Motion's activity during recording time. Only recorded with Smart Detection on;
+    /// optional, so ride files without it (older versions) still load.
+    public var motion: MotionSummary?
 
     public init(id: UUID = UUID(), source: RideSource, startDate: Date) {
         schemaVersion = Self.currentSchemaVersion
