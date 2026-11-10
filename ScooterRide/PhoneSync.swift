@@ -71,6 +71,10 @@ final class PhoneSync: NSObject {
         }
     }
 
+    private func inventoryReply(for ids: [UUID]) -> SyncMessage {
+        Inventory.reply(to: ids, isStored: { self.store?.contains(id: $0) == true }, deleted: state.deleted)
+    }
+
     private func importReceived(_ data: Data?, expectedID: UUID?) {
         guard let data, let store else { lastError = "A ride arrived but could not be read."; return }
         let outcome = RideImporter.importRide(data: data, into: store, deleted: state.deleted, expectedID: expectedID)
@@ -111,6 +115,17 @@ extension PhoneSync: WCSessionDelegate {
 
     nonisolated func sessionReachabilityDidChange(_ session: WCSession) {
         Task { @MainActor in self.onChange?() }
+    }
+
+    /// The watch's check-in: answers which of its rides are stored or deleted here. The system
+    /// wakes this app in the background to deliver it, even when the iPhone is locked.
+    nonisolated func session(_ session: WCSession, didReceiveMessage message: [String: Any],
+                             replyHandler: @escaping ([String: Any]) -> Void) {
+        guard case .inventoryRequest(let ids)? = SyncMessage(dictionary: message) else {
+            replyHandler([:])
+            return
+        }
+        Task { @MainActor in replyHandler(self.inventoryReply(for: ids).dictionary) }
     }
 
     nonisolated func session(_ session: WCSession, didReceive file: WCSessionFile) {

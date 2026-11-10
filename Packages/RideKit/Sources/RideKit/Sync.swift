@@ -6,12 +6,23 @@ import Foundation
 //   iPhone --transferUserInfo(.rideAcknowledged)--> watch   (watch stops re-sending that ride)
 //   iPhone --transferUserInfo(.rideDeleted)------->  watch   (watch deletes its copy too)
 //   iPhone --sendMessage(.endRideRequest)--------->  watch   (only when reachable; never queued)
+//   watch  --sendMessage(.inventoryRequest)------->  iPhone  (while the watch app is open and the
+//          <-------------(.inventoryReply)---------           iPhone is in range)
+//
+// The queued transfers reach the iPhone app only while it is running, which it often isn't
+// when the iPhone is locked. A message sent from an open watch app wakes the iPhone app in
+// the background, so it can import waiting rides and answer which rides it has. The answer
+// also carries deletions, so neither direction depends on a queued transfer alone.
 
 /// Small control messages. Encoded as JSON inside a property-list dictionary.
 public enum SyncMessage: Codable, Equatable, Sendable {
     case rideAcknowledged(id: UUID)
     case rideDeleted(id: UUID)
     case endRideRequest(issuedAt: Date)
+    /// Watch → iPhone: which of these rides do you have?
+    case inventoryRequest(ids: [UUID])
+    /// iPhone → watch: of the requested rides, the ones stored here and the ones deleted here.
+    case inventoryReply(stored: [UUID], deleted: [UUID])
 
     public static let payloadKey = "scooterride.sync.v1"
 
@@ -63,6 +74,52 @@ public enum SyncPlanner {
     /// and not already queued in an outstanding transfer.
     public static func ridesToSend(stored: [UUID], state: SyncState, inFlight: Set<UUID>) -> [UUID] {
         stored.filter { !state.acknowledged.contains($0) && !state.deleted.contains($0) && !inFlight.contains($0) }
+    }
+}
+
+/// The watch's check-in with the iPhone: which of the watch's rides does the iPhone have?
+public enum Inventory {
+    /// Most ride ids in one request: about 20 KB, well inside WatchConnectivity's message limit.
+    public static let maxRequestIDs = 500
+
+    /// Watch: the rides to ask about. Newest first (as stored), never ones deleted here.
+    public static func requestIDs(stored: [UUID], state: SyncState) -> [UUID] {
+        Array(stored.filter { !state.deleted.contains($0) }.prefix(maxRequestIDs))
+    }
+
+    /// iPhone: answers for the requested rides. A deletion wins over a stored copy.
+    public static func reply(to ids: [UUID], isStored: (UUID) -> Bool, deleted: Set<UUID>) -> SyncMessage {
+        .inventoryReply(stored: ids.filter { !deleted.contains($0) && isStored($0) },
+                        deleted: ids.filter { deleted.contains($0) })
+    }
+
+    public struct Outcome: Equatable, Sendable {
+        /// Now known to be on the iPhone.
+        public var newlyAcknowledged: Set<UUID> = []
+        /// Deleted on the iPhone: delete the watch's copy.
+        public var toDelete: Set<UUID> = []
+        /// Neither stored nor deleted on the iPhone (not sent yet, or still waiting to be imported).
+        public var missing: Set<UUID> = []
+    }
+
+    /// Watch: applies a reply to the sync state. Ids that weren't asked about are ignored.
+    public static func apply(stored: [UUID], deleted: [UUID], requested: [UUID],
+                             to state: inout SyncState) -> Outcome {
+        let asked = Set(requested)
+        let storedThere = Set(stored).intersection(asked)
+        let deletedThere = Set(deleted).intersection(asked)
+        var outcome = Outcome()
+        for id in deletedThere {
+            state.deleted.insert(id)
+            state.acknowledged.remove(id)
+            outcome.toDelete.insert(id)
+        }
+        for id in storedThere.subtracting(deletedThere) where !state.acknowledged.contains(id) {
+            state.acknowledged.insert(id)
+            outcome.newlyAcknowledged.insert(id)
+        }
+        outcome.missing = asked.subtracting(storedThere).subtracting(deletedThere)
+        return outcome
     }
 }
 

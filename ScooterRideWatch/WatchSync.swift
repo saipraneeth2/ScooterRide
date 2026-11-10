@@ -37,8 +37,15 @@ final class WatchSync: NSObject {
 
     func isSynced(_ id: UUID) -> Bool { state.acknowledged.contains(id) }
 
-    /// Queues every stored ride the iPhone has not confirmed yet.
+    /// Brings the iPhone up to date. When it is in range, asks it first which rides it has
+    /// (see `checkIn`), then sends only what is still missing. Otherwise queues every ride
+    /// the iPhone has not confirmed; the system delivers those later.
     func syncPending() {
+        guard let session, session.activationState == .activated, store != nil else { return }
+        if session.isReachable { checkIn(thenSend: true) } else { sendUnconfirmed() }
+    }
+
+    private func sendUnconfirmed() {
         guard let session, session.activationState == .activated, let store else { return }
         let stored = store.all().rides.map(\.id)
         let inFlight = Set(session.outstandingFileTransfers.compactMap { RideFileMetadata.rideID(from: $0.file.metadata) })
@@ -50,6 +57,72 @@ final class WatchSync: NSObject {
             }
         }
     }
+
+    // MARK: Check-in
+
+    private var checkInInFlight = false
+    private var checkInScheduled = false
+    private var followUpCheckIns = 0
+    private static let maxFollowUpCheckIns = 3
+
+    /// Asks the iPhone which of the watch's rides it has stored or deleted, and applies the
+    /// answer. Sending a message from the open watch app wakes the iPhone app in the background,
+    /// even when the iPhone is locked, so it can also import rides waiting in its inbox.
+    /// Without a reply (out of range, timeout), the queued transfers still deliver later.
+    func checkIn(thenSend: Bool = false) {
+        guard let session, session.activationState == .activated, session.isReachable, let store,
+              !checkInInFlight else {
+            if thenSend { sendUnconfirmed() }
+            return
+        }
+        let ids = Inventory.requestIDs(stored: store.all().rides.map(\.id), state: state)
+        guard !ids.isEmpty else { return }
+        checkInInFlight = true
+        session.sendMessage(SyncMessage.inventoryRequest(ids: ids).dictionary, replyHandler: { reply in
+            let decoded = SyncMessage(dictionary: reply)
+            Task { @MainActor in self.finishCheckIn(decoded, requested: ids, thenSend: thenSend) }
+        }, errorHandler: { error in
+            let message = error.localizedDescription
+            Task { @MainActor in
+                self.checkInInFlight = false
+                self.lastError = "Couldn't check in with iPhone: \(message)"
+                if thenSend { self.sendUnconfirmed() }
+            }
+        })
+    }
+
+    private func finishCheckIn(_ reply: SyncMessage?, requested: [UUID], thenSend: Bool) {
+        checkInInFlight = false
+        if case .inventoryReply(let stored, let deleted) = reply {
+            let outcome = Inventory.apply(stored: stored, deleted: deleted, requested: requested, to: &state)
+            for id in outcome.toDelete { try? store?.delete(id: id) }
+            if !outcome.newlyAcknowledged.isEmpty || !outcome.toDelete.isEmpty {
+                persist()
+                onChange?()
+            }
+            // A ride that already reached the iPhone may still be waiting to be imported
+            // there: ask again shortly, a few times at most.
+            if outcome.missing.isEmpty {
+                followUpCheckIns = 0
+            } else if followUpCheckIns < Self.maxFollowUpCheckIns {
+                followUpCheckIns += 1
+                scheduleCheckIn(after: 5)
+            }
+        }
+        if thenSend { sendUnconfirmed() }
+    }
+
+    private func scheduleCheckIn(after seconds: TimeInterval) {
+        guard !checkInScheduled else { return }
+        checkInScheduled = true
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+            self.checkInScheduled = false
+            self.checkIn()
+        }
+    }
+
+    // MARK: Retries
 
     private var retryScheduled = false
 
@@ -86,6 +159,8 @@ final class WatchSync: NSObject {
         case .endRideRequest:
             guard message.isFresh(now: Date()) else { return false }
             return onEndRequest?() ?? false
+        case .inventoryRequest, .inventoryReply:
+            return false   // the watch asks; it never answers
         }
         persist()
         onChange?()
@@ -126,6 +201,11 @@ extension WatchSync: WCSessionDelegate {
             if let message {
                 self.lastError = "Ride sync will retry: \(message)"
                 self.scheduleRetry()
+            } else {
+                // Delivered to the iPhone. Check in shortly, which also wakes the iPhone app
+                // to import it if the iPhone is locked.
+                self.followUpCheckIns = 0
+                self.scheduleCheckIn(after: 2)
             }
         }
     }

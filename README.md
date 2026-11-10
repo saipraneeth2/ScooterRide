@@ -12,11 +12,15 @@ Track Segway Ninebot E3 Pro scooter rides on Apple Watch, separately from cyclin
 - **Sync:**
   - **How rides travel:** finished rides are copied from Apple Watch to iPhone with WatchConnectivity `transferFile`. The system queues these transfers and delivers them whenever the iPhone is reachable, even after either app has quit.
   - **Acknowledgements:** the watch re-sends a ride until the iPhone confirms it, retrying after failures, when the iPhone app appears, and when it becomes reachable. The watch's ride list shows *On iPhone* or *Waiting for iPhone*.
+  - **Check-in:** queued transfers reach the iPhone app only while it's running, which it often isn't when the iPhone is locked. So whenever the watch app is open and the iPhone is in range, the watch asks the iPhone which of its rides it has. It asks when the app opens, when the iPhone comes into range, and about 2 s after each ride file arrives.
+    - That message wakes the iPhone app in the background, even when the iPhone is locked, so it imports waiting rides and answers.
+    - The answer also lists rides deleted on the iPhone.
+    - The watch then re-sends only rides the iPhone is missing.
   - **Duplicates:** importing is idempotent, so the same ride arriving twice is harmless.
 - **Ride history on iPhone:**
   - **List:** newest first, each with a map thumbnail of the route, distance, time, and max and average speed.
   - **Ride detail:** a full map with the route (a separate line for each segment between pauses) and start/end markers. It also shows ride time, distance, average and max speed, start and end times, pauses, and GPS fixes kept or filtered out, with reasons.
-- **Deleting rides:** swipe a ride or use **Delete Ride** in its detail screen, then confirm. The ride is deleted from iPhone, and Apple Watch is asked to delete its copy too (queued if the watch is away). Deleted rides are remembered, so a late transfer can never bring one back.
+- **Deleting rides:** swipe a ride or use **Delete Ride** in its detail screen, then confirm. The ride is deleted from iPhone, and Apple Watch is asked to delete its copy too. The request is queued if the watch is away, and the watch's next check-in catches it as well. Deleted rides are remembered, so a late transfer can never bring one back.
 - **Siri and Shortcuts:**
   - **On Apple Watch:** *“Start a scooter ride in ScooterRide”* and *“End my scooter ride in ScooterRide”*. Start opens the app, because location permission and GPS need it on screen. Both appear in the watch's Shortcuts app; on Apple Watch Ultra you can assign *Start Ride* to the Action button (Settings → Action Button → Shortcut). That last part is not yet tested.
   - **On iPhone:** *“End my scooter ride in ScooterRide”* asks the watch to end and save the ride. It only works while the watch app is reachable; otherwise it says so instead of queueing a request that could end a ride later than intended. Watch-side end requests older than 60 s are ignored.
@@ -106,6 +110,7 @@ scripts/build.sh
 - **Session state:** valid lifecycle, invalid transitions throw, active duration excludes pauses.
 - **GPS filtering:** invalid, inaccurate, stale, out-of-order, duplicate, implausible speed and jump.
 - **Persistence:** round trip, newest-first listing, corrupt files skipped, delete, atomic overwrite, checkpoint recovery.
+- **Sync:** messages, deciding what to send, sync state, importing (duplicates, deleted rides, bad input), and the watch's check-in. Also route geometry for the maps.
 
 All GPS data in the tests is **synthetic**.
 
@@ -134,7 +139,7 @@ All GPS data in the tests is **synthetic**.
   Phase 3 will offer only a discovery screen for standard, exposed information. It won't connect automatically or change settings. No firmware flashing, speed-limit changes or safety-feature changes, ever.
 - **Not yet built:** optional scooter detection and the Bluetooth discovery screen (Phase 3).
 - **Development reinstalls can erase unsynced watch rides.** See the note after the install steps.
-- **The watch may not hear back from the iPhone** while the iPhone app isn't running. This was seen once: the ride was safe on the iPhone, but the watch kept showing *Waiting for iPhone*. The cause is not confirmed. Opening ScooterRide on both devices should clear it, but that wasn't tested for that ride.
+- **The check-in needs the watch app on screen.** If you lower your wrist right after saving, the ride is still delivered and imported once the iPhone app runs. The watch then shows *On iPhone* the next time you open it.
 - **App icons** are placeholders.
 - **Physical-device validation is partial.** See *Testing status*.
 
@@ -190,13 +195,25 @@ Phase 1, 2026-11-09, on a Mac mini (Apple M4, macOS 27.0.1, Xcode 26.6, Swift 6.
 
 | Check | Result |
 |---|---|
-| New 32 s ride saved with **End → Save Ride**, watch app on screen. When checked 10 minutes later, the iPhone was locked, so its app was suspended | **Partly passed.** A checkpoint appeared at Start and the ride file at Save. The ride reached the iPhone about 15 s after Save, identical to the watch's copy. **The watch never received the iPhone's acknowledgement** (still missing after 13 min) and kept showing *Waiting for iPhone*. Copies the watch re-sent when it was reopened piled up undelivered in the iPhone's WatchConnectivity inbox (3–4 copies) while the iPhone app was suspended. **Cause not confirmed.** An earlier test ride was lost because it was ended with *Discard Ride* |
+| New 32 s ride saved with **End → Save Ride**, watch app on screen. When checked 10 minutes later, the iPhone was locked, so its app was suspended | **Partly passed.** A checkpoint appeared at Start and the ride file at Save. The ride reached the iPhone about 15 s after Save, identical to the watch's copy. **The watch never received the iPhone's acknowledgement** (still missing after 13 min) and kept showing *Waiting for iPhone*. Copies the watch re-sent when it was reopened piled up undelivered in the iPhone's WatchConnectivity inbox (3–4 copies) while the iPhone app was suspended. The cause was found later, under *Check-in fix*. An earlier test ride was lost because it was ended with *Discard Ride* |
 | The owner accidentally uninstalled the watch app after the 27.2.1 update. Reinstalled from the existing signed build with `devicectl device install app` | **Installed** in 4 s. Developer Mode stayed on through the update. The uninstall erased the watch's rides; both were still on the iPhone |
 | New 33 s ride saved with End → Save, **both apps on screen** | **Passed.** Saved at 12:16:56, on the iPhone at 12:16:57 (identical), acknowledged on the watch at 12:16:58. One fix dated before Start was rejected (`beforeSegmentStart`), confirming the Phase 2 fix on a device |
 | **Deletion:** that ride deleted on the iPhone (swipe, then confirm), watch app on screen | **Passed.** Gone from both devices in the same check, within about 10 s. The watch's `sync-state.json` records it as deleted, the iPhone keeps a deletion record, and the other two rides were untouched |
 
+**Check-in fix, 2026-11-10** (for the lost acknowledgement above):
+
+| Check | Result |
+|---|---|
+| **Reproduction, old build:** 32 s ride saved with the **iPhone locked** (`devicectl` lock state: passcode required), watch app on screen, monitored for 5 min | **Reproduced.** The ride reached the iPhone's WatchConnectivity inbox in 1 s but was **never imported**: the iPhone app wasn't running. The watch kept re-sending: 4 copies piled up in the inbox, and no acknowledgement came back. This was the cause of the lost acknowledgement |
+| `scripts/test.sh` (Xcode 27.2): **50 tests in 11 suites**. The 6 new ones cover check-in messages, message size, request building, the iPhone's reply, and applying the reply on the watch | **Passed**, no warnings |
+| `scripts/build.sh` | **All 3 builds succeeded, 0 warnings** |
+| Signed build over SSH | **Not possible.** Profiles were found, but codesign failed with `errSecInternalComponent`: an SSH session can't use the signing key without the login password. Installed from Xcode on the Mac mini instead |
+| Install of both fixed apps from Xcode | **Installed and running.** Both bundles contain the check-in code. The new iPhone app imported the stuck ride from its inbox on launch. The watch app **kept its data** this time |
+| **Fix verified:** 32 s ride saved with the **iPhone locked** (passcode required), watch app on screen | **Passed.** Saved at 12:43:52; within 2 s the iPhone had **imported it while locked** (inbox empty), the copies were identical, and the watch had recorded the acknowledgement |
+
 **Not yet done for Phase 2:**
-- sync when the iPhone is out of range or locked, and the cause of the lost acknowledgement above
+- sync when the iPhone is out of range for a while, then comes back
+- the check-in's effect on deletions made while the watch was away
 - Siri phrases and the Action button
 - the iPhone End Ride shortcut
 - map thumbnails with a moving route
