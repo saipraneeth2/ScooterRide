@@ -127,6 +127,26 @@ Phase 1, 2026-11-09, on a Mac mini (Apple M4, macOS 27.0.1, Xcode 26.6, Swift 6.
 | Built watch `Info.plist` | Verified: `UIBackgroundModes = [location]`, location usage text, `WKCompanionAppBundleIdentifier`, minimum watchOS 10.0 |
 | Watch app on the Apple Watch Ultra 3 (49 mm) **simulator**, watchOS 26.5 | Installed, launched, still running after 6 s, no crash report. Start screen rendered correctly (screenshot) |
 
+**Physical device, 2026-11-09:**
+
+| Check | Result |
+|---|---|
+| Install on the owner's **Apple Watch Ultra 2 (watchOS 27.2)** from Xcode 26.6 with the Personal Team, over Wi-Fi. Developer Mode had to be enabled on iPhone and watch first | **Installed**: `ScooterRide 0.1 (1)`, confirmed with `devicectl device info apps` |
+| App launch on the watch | **Running**, confirmed with `devicectl device info processes`. The owner confirmed it opened |
+
 **Not yet done:**
-- Tapping Start Ride in the simulator, or replaying a simulated route.
-- **Any run on a physical device** (your Apple Watch Ultra 2 and iPhone 16 Pro Max): installing, the location permission prompt, recording a real ride, background recording with the wrist lowered, battery impact, and comparing GPS speed with the scooter's speedometer.
+- the location permission prompt on the device
+- recording a real ride
+- background recording with the wrist lowered
+- battery impact
+- comparing GPS speed with the scooter's speedometer
+- the iPhone app on the iPhone 16 Pro Max
+- tapping Start Ride in the simulator, or replaying a simulated route
+
+### Troubleshooting Developer Mode on Apple Watch
+
+The watch's Developer Mode switch appears only after Xcode connects to the watch. Xcode reaches the watch **over Wi-Fi**, not through the iPhone's cable. If it's missing:
+1. Turn on Developer Mode on the iPhone first. Connect it by cable, then go to Settings → Privacy & Security → Developer Mode.
+2. Put the watch on the same Wi-Fi network as the Mac, and keep it awake and unlocked.
+3. Open Xcode → Window → Devices and Simulators and wait for the watch to connect.
+4. Restart the Mac, iPhone and watch if it stays unavailable.
