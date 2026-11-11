@@ -98,6 +98,45 @@ struct SpeedTests {
         var e = SpeedEstimator()
         #expect(e.push(0.3) == 0)
     }
+
+    @Test func ignoresDerivedSpeedFromFixesTooCloseOrTooFast() {
+        let e = SpeedEstimator()
+        let prev = Synthetic.sample(at: 0, accuracy: 19.8)
+        // 4.9 m in 0.092 s: GPS warm-up jitter, not 120 mph.
+        #expect(e.rawSpeed(for: Synthetic.sample(northMeters: 4.9, at: 0.092), previous: prev) == nil)
+        // 60 m in 1 s (134 mph): beyond any scooter.
+        #expect(e.rawSpeed(for: Synthetic.sample(northMeters: 60, at: 1), previous: prev) == nil)
+        #expect(approx(e.rawSpeed(for: Synthetic.sample(northMeters: 8, at: 1), previous: prev), 8, tol: 0.01))
+    }
+
+    @Test func settlesOnlyWithAFullWindow() {
+        var e = SpeedEstimator()
+        _ = e.push(53.7)
+        let afterOne = e.isSettled
+        _ = e.push(0)
+        let afterTwo = e.isSettled
+        _ = e.push(0)
+        #expect(!afterOne && !afterTwo)
+        #expect(e.isSettled)
+    }
+
+    /// Shape of a real watch recording (values are synthetic): two warm-up fixes 0.09 s apart
+    /// with 4.9 m of jitter, then a stationary rider with Doppler speed 0. Before the fix this
+    /// produced a 120 mph point and a 60 mph max speed.
+    @Test func warmUpJitterNeverBecomesASpeed() throws {
+        var r = RideRecorder()
+        try r.start(at: Synthetic.t0, source: .watch)
+        var fixes = [Synthetic.sample(at: 0.07, accuracy: 19.8),
+                     Synthetic.sample(northMeters: 4.9, at: 0.16, accuracy: 5),
+                     Synthetic.sample(northMeters: 5, at: 5.41, accuracy: 12.3, speed: 0, speedAccuracy: 1.45)]
+        fixes += (6...24).map { Synthetic.sample(northMeters: 5, at: Double($0) + 0.41, accuracy: 10, speed: 0, speedAccuracy: 1.4) }
+        let decisions = Synthetic.feed(fixes, into: &r)
+        let ride = try r.end(at: Synthetic.t0.addingTimeInterval(25))
+        #expect(decisions.allSatisfy { $0.isAccepted })   // the fixes are fine; only the speed math was wrong
+        #expect((ride.maxSpeedMetersPerSecond ?? 0) < 0.5)
+        #expect(ride.route.allSatisfy { ($0.estimatedSpeed ?? 0) < 0.5 })
+        #expect(RideTypeEstimator.estimate(ride).type == .notEnoughData)
+    }
 }
 
 @Suite("Ride recorder: metrics")

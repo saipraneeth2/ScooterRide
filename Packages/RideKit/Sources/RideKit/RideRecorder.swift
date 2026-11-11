@@ -168,7 +168,8 @@ public struct RideRecorder: Sendable {
         // Speed
         if let raw = estimator.rawSpeed(for: sample, previous: previousInSegment) {
             let smoothed = estimator.push(raw)
-            smoothedSpeed = smoothed
+            // Shown, saved and counted toward the max only once the median can reject a spike.
+            smoothedSpeed = estimator.isSettled ? smoothed : nil
             if estimator.isSettled {
                 s.maxSpeedMetersPerSecond = max(s.maxSpeedMetersPerSecond ?? 0, smoothed)
             }

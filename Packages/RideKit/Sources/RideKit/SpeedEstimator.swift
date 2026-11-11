@@ -15,15 +15,23 @@ public struct SpeedEstimator: Codable, Equatable, Sendable {
     public var window: Int
     /// Derived speeds over gaps longer than this (seconds) are not trusted.
     public var maxDerivationGap: TimeInterval
+    /// Derived speeds over gaps shorter than this are not trusted either. Seen on a real watch:
+    /// two warm-up fixes 0.09 s apart with 4.9 m of jitter, which divides out to 120 mph.
+    public var minDerivationGap: TimeInterval
+    /// A derived speed above this (m/s) is noise, not movement: discard it.
+    public var maxDerivedSpeed: Double
 
     public private(set) var recent: [Double] = []
 
     public init(maxReportedSpeedAccuracy: Double = 2.5, stationaryThreshold: Double = 0.5,
-                window: Int = 3, maxDerivationGap: TimeInterval = 10) {
+                window: Int = 3, maxDerivationGap: TimeInterval = 10, minDerivationGap: TimeInterval = 0.9,
+                maxDerivedSpeed: Double = Units.metersPerSecond(fromMph: 40)) {
         self.maxReportedSpeedAccuracy = maxReportedSpeedAccuracy
         self.stationaryThreshold = stationaryThreshold
         self.window = max(1, window)
         self.maxDerivationGap = maxDerivationGap
+        self.minDerivationGap = minDerivationGap
+        self.maxDerivedSpeed = maxDerivedSpeed
     }
 
     /// A single raw estimate for `sample`, or nil if neither method is reliable.
@@ -37,8 +45,9 @@ public struct SpeedEstimator: Codable, Equatable, Sendable {
         }
         guard let p = previous else { return nil }
         let dt = sample.timestamp.timeIntervalSince(p.timestamp)
-        guard dt > 0, dt <= maxDerivationGap else { return nil }
-        return GeoMath.distance(p, sample) / dt
+        guard dt >= minDerivationGap, dt <= maxDerivationGap else { return nil }
+        let v = GeoMath.distance(p, sample) / dt
+        return v <= maxDerivedSpeed ? v : nil
     }
 
     /// Adds an estimate and returns the smoothed (median) speed, clamped to 0 when stopped.
@@ -52,8 +61,10 @@ public struct SpeedEstimator: Codable, Equatable, Sendable {
         return median < stationaryThreshold ? 0 : median
     }
 
-    /// True once the window holds enough estimates for the median to reject a lone spike.
-    public var isSettled: Bool { recent.count >= min(window, 2) }
+    /// True once the window is full. With fewer estimates the "median" of two is their
+    /// average, which lets half of a lone spike through (seen on a real watch: 60 mph max
+    /// from a 120 mph warm-up spike averaged with 0).
+    public var isSettled: Bool { recent.count >= window }
 
     public mutating func reset() { recent.removeAll() }
 }

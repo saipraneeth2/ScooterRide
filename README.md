@@ -5,7 +5,7 @@ Track Segway Ninebot E3 Pro scooter rides on Apple Watch, separately from cyclin
 **Status:**
 - **Phase 1** (manual ride tracking with GPS on Apple Watch) is tested on the owner's watch.
 - **Phase 2** (iPhone sync, ride history with maps, deleting rides, Siri Shortcuts) is built and unit-tested. **Watch → iPhone sync and iPhone → watch deletion are tested on the owner's devices.** Siri, the iPhone End Ride shortcut and maps of a moving ride are not yet tested on devices.
-- **Phase 3** (optional, user-enabled scooter detection) is not started.
+- **Phase 3** (optional Smart Detection and Bluetooth discovery) is built and unit-tested, and installed on the owner's watch. Its features are **not yet tested on devices**.
 
 ## What Phase 2 adds
 
@@ -28,6 +28,29 @@ Track Segway Ninebot E3 Pro scooter rides on Apple Watch, separately from cyclin
 - **Pre-start fixes are ignored.** A GPS fix timestamped before Start or Resume is no longer recorded. This was found in the first device test.
 - **Maps** use Apple Maps tiles over the network; your ride data never leaves your devices.
 
+## What Phase 3 adds
+
+Smart Detection is **off by default** and has its own switch on each device. It only ever **suggests**; nothing starts, ends or changes a ride without a tap. Every result is labeled as an estimate.
+
+- **On Apple Watch** (switch on the start screen):
+  - **Stop suggestion:** during a ride, after 3 minutes without riding movement, the watch taps your wrist and asks *End ride?* (Save Ride / Keep Riding). It shows an alert in the app, or a notification with *End & Save* and *Keep Riding* when the wrist is down.
+    - The evidence must be continuous: slow GPS speed with motion not riding-like, or, without GPS speed, motion saying stationary or walking.
+    - *Keep Riding* snoozes it for 10 minutes. It never fires while paused.
+  - **Start suggestion:** only while ScooterRide is open and not recording. It suggests *Start* when GPS shows a sustained 6–23 mph, or when the scooter you picked is advertising nearby (one 15-second scan per app opening). *Not now* snoozes it for 5 minutes.
+  - **Motion during rides:** Core Motion activity time (cycling, automotive, walking and so on) is saved with each ride.
+  - **Ride-type label** on the summary.
+- **On iPhone** (Settings in the History screen's info button):
+  - **Ride-type labels:** *Scooter-like riding*, *Mostly walking*, *Faster than an E3 Pro (car?)* or *Not enough movement to tell*, with the numbers behind each. GPS speed can't tell a scooter from a bicycle.
+  - **Riding alerts:** optional, and they need *Always* location. iOS wakes the app after significant location changes (roughly 500 m). If the last minutes of iPhone motion look like riding, ScooterRide sends a notification suggesting a ride on Apple Watch.
+    - It skips: during a recorded ride, more than once in 30 minutes, above 25 mph, and *automotive* motion without a speed to check.
+    - The Settings screen shows the last decision and why.
+- **Bluetooth discovery** (both devices, one shared implementation in RideKit):
+  - **Scanning:** only when you tap Scan, for 20 s. It lists name, signal, connectable, transmit power, maker ID and advertised services, with standard names.
+  - **Masked names:** names that look like serial numbers (this E3 Pro advertises its serial) are masked, like `ZX…CD56`, and never stored.
+  - **Read standard info:** connects only when you tap it, reads only Device Information (not the Serial Number or System ID) and Battery Level, then disconnects.
+  - **Never writes or subscribes.** No notification subscriptions, no vendor channel, and no setting changes. A unit test fails if the scanner's source ever gains a write or subscribe call.
+- **Why the watch can't detect a ride start in the background:** watchOS has no significant-change location, region monitoring or `CLMonitor` (checked in the watchOS 27.2 SDK headers). So the watch can only notice riding while ScooterRide is open; the iPhone alert covers the rest.
+
 ## What it does (Phase 1)
 
 - **Controls:** Start Ride, Pause, Resume and End Ride on Apple Watch. Ending asks Save / Discard / Keep Riding.
@@ -42,7 +65,7 @@ Track Segway Ninebot E3 Pro scooter rides on Apple Watch, separately from cyclin
 - **No workouts:** no HealthKit is used at all. Rides are never saved as workouts, cycling or otherwise, and add no exercise minutes or calories.
 - **Apple's workout detection is untouched:** ScooterRide cannot change how Apple Watch classifies motion, and there is no public API to retrain it or to silence only cycling prompts. If your watch suggests *Outdoor Cycling* while you ride, you can turn the prompt off yourself in the Watch app on iPhone: **Workout > Start Workout Reminder**. Menu names can vary by watchOS version. This turns off start reminders for every workout type.
 - **No account, servers or cloud.** Rides stay in the app's own storage on the device.
-- **No scooter communication.** Speed comes from GPS, not from the scooter. The E3 Pro has no documented public Bluetooth API; see *Known limitations*.
+- **No scooter control.** Speed comes from GPS, not from the scooter. The E3 Pro has no documented public Bluetooth API; see *Known limitations*. The Bluetooth screen only reads standard information when you tap, and never writes.
 
 ## Project layout
 
@@ -118,7 +141,7 @@ All GPS data in the tests is **synthetic**.
 
 ## Background location and battery
 
-- **Background updates:** while a ride is active, the watch app uses the `location` background mode with `allowsBackgroundLocationUpdates` and a `CLBackgroundActivitySession` (watchOS 10+), so recording can continue when you lower your wrist. Apple's headers document these APIs for watchOS. Whether watchOS keeps delivering fixes for a full ride on your watch **has not been tested on a device yet**.
+- **Background updates:** while a ride is active, the watch app uses the `location` background mode with `allowsBackgroundLocationUpdates` and a `CLBackgroundActivitySession` (watchOS 10+), so recording can continue when you lower your wrist. Apple's headers document these APIs for watchOS. On the owner's Ultra 2, fixes kept arriving about once a second through real 28- and 15-minute rides (largest gaps: 13 s and 1 s). The wrist position during those rides wasn't recorded.
 - **Safety check:** the app checks that the background mode is present before enabling it. If it isn't, it falls back to foreground-only tracking instead of crashing.
 - **Watch screen:** watchOS can still return to the watch face. Recording continues in the background, but the ScooterRide screen isn't kept in front.
 - **Battery:** continuous GPS is among the most power-hungry things a watch does. Expect noticeably faster drain during rides, especially with **Precise GPS** on. No battery measurements have been made yet.
@@ -136,8 +159,8 @@ All GPS data in the tests is **synthetic**.
   - a standard PnP ID
   - no standard battery, firmware or speed data
   
-  Phase 3 will offer only a discovery screen for standard, exposed information. It won't connect automatically or change settings. No firmware flashing, speed-limit changes or safety-feature changes, ever.
-- **Not yet built:** optional scooter detection and the Bluetooth discovery screen (Phase 3).
+  The Bluetooth screen shows only standard, exposed information. It doesn't connect automatically and never changes settings. No firmware flashing, speed-limit changes or safety-feature changes, ever.
+- **Smart Detection is an estimate.** Core Motion has no scooter activity, so a scooter may register as cycling, automotive or unknown. GPS speed can't tell a scooter from a bicycle. The watch notices riding only while ScooterRide is open, and the iPhone alert arrives only after roughly 500 m.
 - **Development reinstalls can erase unsynced watch rides.** See the note after the install steps.
 - **The check-in needs the watch app on screen.** If you lower your wrist right after saving, the ride is still delivered and imported once the iPhone app runs. The watch then shows *On iPhone* the next time you open it.
 - **App icons** are placeholders.
@@ -218,12 +241,36 @@ Phase 1, 2026-11-09, on a Mac mini (Apple M4, macOS 27.0.1, Xcode 26.6, Swift 6.
 - the iPhone End Ride shortcut
 - map thumbnails with a moving route
 
+**Phase 3, 2026-11-10, Mac mini (Xcode 27.2):**
+
+| Check | Result |
+|---|---|
+| `scripts/test.sh`: 21 new tests (motion, stop and start suggestions, ride type, riding alert, Bluetooth names, PnP ID, masking, no-write guard) | **71 tests in 17 suites passed** |
+| `scripts/build.sh` | **All 3 builds succeeded, 0 warnings** |
+| Built Info.plist files | iPhone: location (when in use and Always), motion and Bluetooth texts present. Watch: location, motion and Bluetooth texts present, plus `UIBackgroundModes = [location]` |
+| Both apps launched in paired **simulators** (iPhone 17 Pro Max and Apple Watch) | Still running after 8 s; no crash |
+| Installed on the owner's watch from Xcode | The watch app saved its Smart Detection setting (currently off), which only the Phase 3 build does. The iPhone was unreachable when checked |
+
+**Real rides, 2026-11-10** (owner's Apple Watch Ultra 2, Smart Detection off, so no motion data; totals only):
+
+| Ride | Result |
+|---|---|
+| 28:45, 2.36 mi | Max **19.2 mph**, median moving speed 17.8 mph, 1,712 fixes (largest gap 13 s), 15 rejected. Synced and acknowledged. Estimate: scooter-like |
+| 15:24, 2.44 mi | Max **19.2 mph**, median moving speed 17.9 mph, 917 fixes (one every second), 10 rejected. Synced and acknowledged. Estimate: scooter-like |
+| 24 s, standing still | **Bug found: max speed 60.1 mph.** Two warm-up fixes 0.09 s apart with 4.9 m of jitter were divided into 120 mph. The fixes themselves were legitimately kept, being within their accuracy. A median of only two readings then averaged that spike with 0, and it counted toward the max |
+
+**Fixed** (Phase 1 code):
+- Speed is derived from position only for fixes at least 0.9 s apart, and never above 40 mph.
+- Speed is shown, saved and counted toward the max only once all three readings in the median are present.
+- A regression test replays the shape of that recording. **74 tests pass; 3 builds succeed.**
+- The fix is **not yet installed** on the devices. The affected ride keeps its wrong max.
+
+**Not yet done for Phase 3:** the permission prompts on devices, a stop suggestion during a ride, a start suggestion by GPS or Bluetooth, motion data and ride-type labels with Smart Detection on, both Bluetooth screens with the scooter, and an iPhone riding alert on a real trip.
+
 **Not yet done:**
 - the location permission prompt after the reinstall
-- recording a moving ride
-- background recording with the wrist lowered
 - battery impact
-- comparing GPS speed with the scooter's speedometer
+- comparing GPS speed with the scooter's speedometer directly (the two real rides topped out at 19.2 mph against the E3 Pro's 20 mph limit)
 - tapping Start Ride in the simulator, or replaying a simulated route
 
 ### Troubleshooting Developer Mode on Apple Watch
