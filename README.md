@@ -1,6 +1,10 @@
+<p align="center"><img src="docs/icon.png" width="160" alt="ScooterRide app icon: a white kick scooter inside a green speed gauge"></p>
+
 # ScooterRide
 
 Track Segway Ninebot E3 Pro scooter rides on Apple Watch, separately from cycling workouts.
+
+*An independent project, not affiliated with or endorsed by Segway-Ninebot.*
 
 **Status:**
 - **Phase 1** (manual ride tracking with GPS on Apple Watch) is tested on the owner's watch.
@@ -72,14 +76,18 @@ Smart Detection is **off by default** and has its own switch on each device. It 
 ```
 ScooterRide.xcodeproj          iOS app + watchOS app (folder-synced groups, shared schemes)
 Packages/RideKit/              Swift package: units, GPS filter, speed estimator, ride state
-                               machine, metrics, JSON storage. No CoreLocation/HealthKit/UI.
+                               machine, metrics, JSON storage, sync logic, Smart Detection,
+                               read-only Bluetooth scanner and shared Bluetooth screens. No HealthKit.
   Tests/RideKitTests/          Unit tests (Swift Testing), synthetic GPS tracks only
 ScooterRideWatch/              watchOS app: LocationService (Core Location), RideViewModel, WatchSync
-                               (WatchConnectivity), RideIntents (App Intents + Siri phrases), views
+                               (WatchConnectivity), SmartDetection, RideIntents (App Intents + Siri), views
 ScooterRide/                   iOS app: RideLibrary, PhoneSync (WatchConnectivity), history, detail
-                               with MapKit, RouteSnapshotter (list thumbnails), PhoneIntents, About
+                               with MapKit, RouteSnapshotter (list thumbnails), RidingAlerts, PhoneIntents,
+                               About/Settings
 Config/ScooterRideWatch-Info.plist   adds the "location" background mode for the watch app
 scripts/build.sh, scripts/test.sh    command-line build and test
+scripts/make-icon.swift              draws the app icon (Core Graphics; `swift scripts/make-icon.swift out.png 1024`)
+docs/icon.png                        the icon at 512 px, for this README
 ```
 
 **How the pieces fit together:**
@@ -163,7 +171,7 @@ All GPS data in the tests is **synthetic**.
 - **Smart Detection is an estimate.** Core Motion has no scooter activity, so a scooter may register as cycling, automotive or unknown. GPS speed can't tell a scooter from a bicycle. The watch notices riding only while ScooterRide is open, and the iPhone alert arrives only after roughly 500 m.
 - **Development reinstalls can erase unsynced watch rides.** See the note after the install steps.
 - **The check-in needs the watch app on screen.** If you lower your wrist right after saving, the ride is still delivered and imported once the iPhone app runs. The watch then shows *On iPhone* the next time you open it.
-- **App icons** are placeholders.
+- **App icon** is an original design drawn in code (`scripts/make-icon.swift`). It has no dark or tinted variants yet.
 - **Physical-device validation is partial.** See *Testing status*.
 
 ## Testing status (only results that actually ran)
