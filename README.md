@@ -6,6 +6,8 @@ Track Segway Ninebot E3 Pro scooter rides on Apple Watch, separately from cyclin
 
 *An independent project, not affiliated with or endorsed by Segway-Ninebot.*
 
+*Built with AI assistance (Claude).*
+
 **Status:**
 - **Phase 1** (manual ride tracking with GPS on Apple Watch) is tested on the owner's watch.
 - **Phase 2** (iPhone sync, ride history with maps, deleting rides, Siri Shortcuts) is built and unit-tested. **Watch → iPhone sync and iPhone → watch deletion are tested on the owner's devices.** Siri, the iPhone End Ride shortcut and maps of a moving ride are not yet tested on devices.
